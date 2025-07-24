@@ -1,6 +1,6 @@
 import asyncio
 import re
-from playwright.async_api import async_playwright, expect
+from playwright.async_api import async_playwright, expect #type: ignore
 
 # --- Configuration ---
 NOTEBOOK_URL = "https://notebooklm.google.com/notebook/" 
@@ -55,16 +55,45 @@ async def query_notebook(question: str) -> str:
             await expect(ai_container.locator(".loading-dots")).to_be_hidden(timeout=60000)
 
             # 3) (Optional) small buffer to let any final bits render
-            await page.wait_for_timeout(4000)  
+            await page.wait_for_timeout(15000)  
+            # --- NEW: Save raw response as Markdown ---
+            try:
+                import html2text
+                message_content = ai_container.locator(".message-text-content")
+                html_content = await message_content.evaluate("node => node.innerHTML")
+
+                h = html2text.HTML2Text()
+                h.body_width = 0  # Don't wrap lines
+                markdown_content = h.handle(html_content)
+
+                # --- FINAL Markdown Cleaning ---
+                # 1. Fix unicode characters
+                markdown_content = markdown_content.replace('â€¢', '•')
+                markdown_content = markdown_content.replace('â€¦', '…')
+
+                # 2. Remove numbers attached to the end of words (e.g., "hallucination1")
+                #    This is the key fix.
+                markdown_content = re.sub(r'(\w)\d+\b', r'\1', markdown_content)
+                markdown_content = re.sub(r'\.\.\.\.', '.', markdown_content)
+
+                # 3. Remove any remaining bracketed citations like [1] or [2,3]
+                markdown_content = re.sub(r"\[[\d,\s]+\]", "", markdown_content)
+                
+                with open("response.md", "w", encoding="utf-8") as f:
+                    f.write(markdown_content.strip())
+                print("Formatted Markdown response saved to response.md")
+
+            except Exception as e:
+                print(f"Could not save Markdown file: {e}")
+
 
             # 4) Pull absolutely everything
             raw = await ai_container.evaluate("node => node.textContent")
 
             # 5) Clean up UI bits & citations
-            import re
             clean = re.sub(r"keep_pin.*", "", raw, flags=re.DOTALL)      # drop pin/copy/thumbs
             clean = re.sub(r"Save to note", "", clean)                    # drop note button text
-            clean = re.sub(r"\[\d+\]", "", clean)                         # drop inline [1],[2] markers
+            clean = re.sub(r"\[[\d,\s]+\]", "", clean)                   # drop inline [1], [2,3] markers
             clean = re.sub(r"\s{2,}", " ", clean).strip()                 # collapse extra whitespace
             # raw_clean is your 'clean' string from before
             raw_clean = clean
@@ -98,7 +127,7 @@ async def query_notebook(question: str) -> str:
             # 5) Tidy up multiple blank lines (max two)
             clean = re.sub(r"\n{3,}", "\n\n", clean)
 
-            return clean or "Scraped text was empty."
+            return markdown_content.strip() or "Scraped markdown was empty."
 
 
         except Exception as e:

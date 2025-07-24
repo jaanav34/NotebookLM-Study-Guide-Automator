@@ -10,6 +10,9 @@ __pycache__/
 *.db
 # C extensions
 *.so
+*.md
+*.tex
+.env
 extracted_chunks.txt
 *.jsonl
 # Distribution / packaging
