@@ -88,47 +88,61 @@ async def query_notebook(question: str) -> str:
 
 
             # 4) Pull absolutely everything
-            raw = await ai_container.evaluate("node => node.textContent")
+            # --- PRE-PROCESS HTML TO REMOVE CITATIONS ---
+            # This JavaScript code runs inside the browser to remove both types of citation buttons.
+            await ai_container.evaluate("""
+                node => {
+                    // Selects both numbered citations and the '...' expander button
+                    const citations = node.querySelectorAll('button.citation-marker');
+                    citations.forEach(el => el.remove());
+                }
+            """)
 
-            # 5) Clean up UI bits & citations
-            clean = re.sub(r"keep_pin.*", "", raw, flags=re.DOTALL)      # drop pin/copy/thumbs
-            clean = re.sub(r"Save to note", "", clean)                    # drop note button text
-            clean = re.sub(r"\[[\d,\s]+\]", "", clean)                   # drop inline [1], [2,3] markers
-            clean = re.sub(r"\s{2,}", " ", clean).strip()                 # collapse extra whitespace
-            # raw_clean is your 'clean' string from before
-            raw_clean = clean
+            # --- Save Cleaned Markdown ---
+            # This part is for the final study guide file.
+            markdown_content = ""
+            try:
+                import html2text
+                message_content = ai_container.locator(".message-text-content")
+                html_content = await message_content.evaluate("node => node.innerHTML")
+                
+                h = html2text.HTML2Text()
+                h.body_width = 0
+                markdown_content = h.handle(html_content)
 
-            # 1. Ensure each top‑level bullet starts on its own line
-            #    (we split on the “• ” marker, then re‑join with a newline + marker)
-            sections = raw_clean.split("• ")
-            formatted = "• " + "\n\n• ".join(s.strip() for s in sections if s.strip())
+                # Fix common unicode characters in the markdown output
+                markdown_content = markdown_content.replace('â€¢', '•').replace('â€¦', '…')
 
-            # 2. Turn each sub‑bullet “◦ ” into an indented bullet
-            formatted = formatted.replace("◦ ", "\n    ◦ ")
+                with open("response.md", "w", encoding="utf-8") as f:
+                    f.write(markdown_content.strip())
+                print("Cleaned Markdown response saved to response.md")
 
-            # 3. Add a blank line after the introductory sentence(s)
-            #    (optional: if you know where the break is, e.g. after “role:”)
-            formatted = formatted.replace("role:", "role:\n")
+            except Exception as e:
+                print(f"Could not save Markdown file: {e}")
 
-            # 1) Remove trailing ellipses and stray numbers (like “3….” or “310.”)
-            clean = re.sub(r"\d+\.\.\.+", "", formatted)
+            # --- Clean and Format Plain Text (for Terminal Display) ---
+            # This part uses the SAFE regex rules to make the terminal output readable.
+            raw_text = await ai_container.evaluate("node => node.textContent")
+            
+            # 1. Remove UI text like "Save to note", etc.
+            clean_text = re.sub(r"keep_pin.*", "", raw_text, flags=re.DOTALL)
+            clean_text = re.sub(r"Save to note", "", clean_text)
 
-            # 2) Collapse any remaining runs of dots
-            clean = re.sub(r"\.{2,}", ".", clean)
+            # 2. Fix unicode characters and collapse whitespace
+            clean_text = clean_text.replace('â€¢', '•').replace('â€¦', '…')
+            clean_text = re.sub(r"\s{2,}", " ", clean_text).strip()
 
-            # 3) Normalize whitespace around bullets
-            #    Ensure every “•” is on its own line
-            clean = re.sub(r"\s*•\s*", "\n\n• ", clean).strip()
+            # 3. Format for terminal readability
+            clean_text = clean_text.replace("• ", "\n\n• ").strip()
 
-            # 4) Normalize sub‑bullets “◦”
-            #    Ensure they indent under the parent
-            clean = re.sub(r"\s*◦\s*", "\n    ◦ ", clean)
+            # --- Print the clean terminal text to the console ---
+            # This is separate from the markdown file generation.
+            print("\n--- Scraped Response (for Terminal) ---")
+            print(clean_text)
+            print("---------------------------------------")
 
-            # 5) Tidy up multiple blank lines (max two)
-            clean = re.sub(r"\n{3,}", "\n\n", clean)
-
+            # The function's main purpose is to return clean markdown for the study guide generator.
             return markdown_content.strip() or "Scraped markdown was empty."
-
 
         except Exception as e:
             return f"An error occurred during automation: {e}"
