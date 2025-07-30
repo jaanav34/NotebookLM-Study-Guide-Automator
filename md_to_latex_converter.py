@@ -3,14 +3,17 @@ import re
 import time
 import google.generativeai as genai
 from dotenv import load_dotenv
+import unicodedata
 
 load_dotenv()
 
 # --- Configuration ---
-INPUT_FILENAME = "final_study_guide.md"
-OUTPUT_FILENAME = "study_guide"
+INPUT_FILENAME = "studyguides/final_study_guide.md"
+OUTPUT = "studyguides/study_guide.tex"
+CLEAN = "studyguides/study_guide_CLEAN.tex"
 MODEL_NAME = "gemma-3-27b-it" # Or any other suitable model like "gemini-1.0-pro"
-
+# ─── Global toggle: strip all circuitikz environments? ───────────────────────
+REMOVE_TIKZ_BLOCKS = True
 # This LaTeX header is taken directly from your prompt
 LATEX_HEADER = r"""
 \documentclass{article}
@@ -179,8 +182,6 @@ def post_process_latex(latex_content: str) -> str:
     # Key: The text/character to find.
     # Value: The LaTeX text to replace it with.
     cleaning_rules = {
-        'ⁿ': '$^{n}$',         # Superscript 'n' for exponents
-        '^n': '$^{n}$',
         'â€™': "'",            # Incorrect apostrophe
         'â€¦': '...',        # Incorrect ellipsis
         'â—¦': r'    \item',  # NEW: Converts unicode bullet to an indented item
@@ -189,21 +190,29 @@ def post_process_latex(latex_content: str) -> str:
         # '³': '^{3}',
     }
     
-    processed_content = latex_content
+    latex_content = latex_content
     for find_char, replace_with in cleaning_rules.items():
-        processed_content = processed_content.replace(find_char, replace_with)    
+        latex_content = latex_content.replace(find_char, replace_with)    
     
-    processed_content = break_table_rows(processed_content)
-    processed_content = fix_hlines_by_line(latex_content)
-    processed_content = re.sub(r'\[\s*(\\begin{tikzpicture}.*?)\\end{tikzpicture}\s*\]',
-               r'\1\\end{tikzpicture}', processed_content, flags=re.DOTALL)
-
-
+    latex_content = escape_plaintext_underscores_and_superscripts(latex_content)
+    # **New step**: fix those stray single-backslashes in tables
+    latex_content = fix_tabular_row_separators(latex_content)
+    latex_content = break_table_rows(latex_content)
+    latex_content = fix_hlines_by_line(latex_content)
+    latex_content = re.sub(r'\[\s*(\\begin{tikzpicture}.*?)\\end{tikzpicture}\s*\]',
+               r'\1\\end{tikzpicture}', latex_content, flags=re.DOTALL)
+    latex_content = fix_carets(latex_content)
+    # This call will wrap all blocks of lonely items in an itemize environment.
+    latex_content = fix_lonely_items(latex_content)
 
     # You can also add more complex regex substitutions here if needed
     # For example, to remove lines that only contain '\hrulefill'
-    processed_content = re.sub(r'^\s*\\hrulefill\s*$', '', processed_content, flags=re.MULTILINE)
-    
+    latex_content = re.sub(r'^\s*\\hrulefill\s*$', '', latex_content, flags=re.MULTILINE)
+    if REMOVE_TIKZ_BLOCKS:
+        latex_content = remove_tikz_blocks(latex_content)
+    latex_content = remap_fourth_itemize(latex_content)
+    latex_content = re.sub(r'[\u0080-\uFFFF]', replace_unicode_char, latex_content)
+
     def fix_enumerate(match):
         # Takes a matched block of text
         block = match.group(0)
@@ -214,12 +223,194 @@ def post_process_latex(latex_content: str) -> str:
 
     # This regex finds consecutive lines starting with "1\. ", "2\. ", etc.
     # and passes the whole block to the fix_enumerate function
-    processed_content = re.sub(r'((\d+\\\. .*(\n|$))+)', fix_enumerate, processed_content)
-
-
+    latex_content = re.sub(r'((\d+\\\. .*(\n|$))+)', fix_enumerate, latex_content)
 
     print("Cleaning complete.")
-    return processed_content
+    return latex_content
+
+def remap_fourth_itemize(text: str) -> str:
+    """
+    Walks through the LaTeX text, tracks itemize depth,
+    and whenever it would start the 4th level, swaps in itemizeDeep
+    (and likewise for the matching \\end).
+    """
+    out = []
+    depth = 0
+    for line in text.splitlines(keepends=True):
+        if r'\begin{itemize}' in line:
+            depth += 1
+            if depth == 4:
+                out.append(line.replace('itemize', 'itemizeDeep'))
+            else:
+                out.append(line)
+        elif r'\end{itemize}' in line:
+            if depth == 4:
+                out.append(line.replace('itemize', 'itemizeDeep'))
+            else:
+                out.append(line)
+            depth -= 1
+        else:
+            out.append(line)
+    return ''.join(out)
+
+def fix_lonely_items(latex_content: str) -> str:
+    """
+    Finds blocks of consecutive 'lonely' \\item lines and wraps them
+    in a \\begin{itemize}...\\end{itemize} environment.
+    This version correctly handles both lonely items and existing list environments.
+    """
+    # This pattern has two parts separated by an OR operator `|`:
+    # 1. `(\\begin\{(?:itemize|enumerate)\}.*?\\end\{(?:itemize|enumerate)\})`:
+    #    This captures any existing, correctly-formed itemize or enumerate block.
+    #    The `re.DOTALL` flag is essential for `.` to match across newlines.
+    # 2. `((?:^\s*\\item.*\n?)+)`:
+    #    This captures a block of one or more consecutive "lonely" item lines.
+    #    The `re.MULTILINE` flag is needed for `^` to match the start of each line.
+    pattern = re.compile(
+        r'(\\begin\{(?:itemize|enumerate)\}.*?\\end\{(?:itemize|enumerate)\})|((?:^\s*\\item.*\n?)+)',
+        re.DOTALL | re.MULTILINE
+    )
+
+    def wrap_if_lonely(match):
+        # The match object will have one of two groups populated.
+        # Group 1: The correctly-formed list block.
+        # Group 2: The lonely item block.
+        
+        # If group 1 matched, it's an existing list. Return it unchanged.
+        if match.group(1):
+            return match.group(1)
+        
+        # If group 2 matched, it's a lonely block. Wrap it.
+        elif match.group(2):
+            block = match.group(2)
+            return f"\\begin{{itemize}}\n{block.strip()}\n\\end{{itemize}}\n"
+        
+        # Should not happen, but return original text just in case
+        return match.group(0)
+
+    return pattern.sub(wrap_if_lonely, latex_content)
+
+
+
+def escape_plaintext_underscores_and_superscripts(text: str) -> str:
+    """
+    In all non‑math segments (i.e. outside $…$):
+      1) Escape lone underscores (_) → \\_
+      2) Turn digit^letter → digit$^letter$
+    """
+    # Split on math segments
+    parts = re.split(r'(\$.*?\$)', text)
+    for idx in range(0, len(parts), 2):   # only plaintext bits
+        pt = parts[idx]
+        # 1) escape any _ that's not already \_
+        pt = re.sub(r'(?<!\\)_', r'\\_', pt)
+        # 2) convert, e.g., "2^n" → "2$^n$"
+        #    only when a digit(s) is directly followed by ^letter/number
+        pt = re.sub(r'(\d+)\^([A-Za-z0-9])', r'\1$^\2$', pt)
+        parts[idx] = pt
+    return ''.join(parts)
+
+def replace_unicode_char(match):
+    ch = match.group(0)
+    cp = ord(ch)
+
+    # 1) Very common typographic apostrophe
+    if cp == 0x2019:   # RIGHT SINGLE QUOTATION MARK
+        return "'"
+
+    # 2) Arrows →, ←, etc.
+    if cp == 0x2192:   # →
+        return r'$\rightarrow$'
+    if cp == 0x2190:   # ←
+        return r'$\leftarrow$'
+    if cp == 0x21D2:   # ⇒
+        return r'$\Rightarrow$'
+    if cp == 0x21D0:   # ⇐
+        return r'$\Leftarrow$'
+
+    name = unicodedata.name(ch, '').upper()
+
+    # 3) Superscripts/subscripts
+    if 'SUPERSCRIPT' in name:
+        part = name.rsplit()[-1].lower()
+        return f'$^{{{part}}}$'
+    if 'SUBSCRIPT' in name:
+        part = name.rsplit()[-1].lower()
+        return f'$_{{{part}}}$'
+
+    # 4) A few other named symbols
+    known = {
+        'BULLET':     r'\item',    # •
+        'ELLIPSIS':   '...',       # …
+        'MINUS':      '-',         # −
+        'MULTIPLICATION SIGN': r'$\times$',
+        'DIVISION SIGN':       r'$\div$',
+        # add more as you discover them
+    }
+    for key, rep in known.items():
+        if key in name:
+            return rep
+
+    # 5) If it's in 0x00–0xFF, let LaTeX char handle it:
+    if cp <= 0xFF:
+        return f'\\char"{cp:02X}'
+
+    # 6) Otherwise drop it (or replace with a placeholder)
+    return ''  # or return '?'  
+
+def fix_tabular_row_separators(text: str) -> str:
+    """
+    Finds every \\begin{tabular}…\\end{tabular} block and inside it
+    replaces occurrences of
+        space + backslash + space
+    (i.e. ' \\ ')
+    with
+        space + double-backslash + space
+    (i.e. ' \\\\ '),
+    preserving everything else exactly.
+    """
+    TAB_PATTERN = re.compile(
+        r'(\\begin\{tabular\}.*?\\end\{tabular\})',
+        flags=re.DOTALL
+    )
+
+    def transform(match):
+        block = match.group(1)
+        # only replace lone " \ " sequences—not \hline or any other \
+        return block.replace(' \\ ', ' \\\\ ')
+
+    return TAB_PATTERN.sub(transform, text)
+
+
+def remove_tikz_blocks(text: str) -> str:
+    """
+    Removes everything from
+      \\begin{circuitikz} … \\end{circuitikz}
+    and
+      \\begin{tikzpicture} … \\end{tikzpicture}
+    inclusive. Single‐pass DOTALL regex.
+    """
+    pattern = re.compile(
+        r'\\begin\{(?:circuitikz|tikzpicture)\}'
+        r'.*?'
+        r'\\end\{(?:circuitikz|tikzpicture)\}',
+        flags=re.DOTALL
+    )
+    return pattern.sub('', text) 
+
+
+def fix_carets(text: str) -> str:
+    # 1) Split into segments: non‐math, math, non‐math, math, …
+    parts = re.split(r'(\$.*?\$)', text)
+
+    # 2) Only in the math parts (odd indices) replace \^ with \char94
+    for i in range(1, len(parts), 2):
+        # Replace literal \^ with \char94
+        parts[i] = re.sub(r'\\\^', r'\\char94', parts[i])
+
+    # 3) Rejoin everything
+    return ''.join(parts)
+
 
 def fix_hlines_by_line(text: str) -> str:
     lines = text.split('\n')
@@ -292,37 +483,37 @@ def main():
             # Assemble the document
             final_latex = LATEX_HEADER + "\n\n" + "\n\n".join(full_latex_output) + "\n\n" + LATEX_FOOTER
 
-            with open(OUTPUT_FILENAME+'.tex', 'w', encoding='utf-8') as f:
+            with open(OUTPUT, 'w', encoding='utf-8') as f:
                 f.write(final_latex)
-            print(f"\n✅ Success! Full LaTeX document assembled and saved to '{OUTPUT_FILENAME+'.tex'}'.")
+            print(f"\n✅ Success! Full LaTeX document assembled and saved to '{OUTPUT}'.")
 
             # Apply the new post-processing function
             final_latex = post_process_latex(final_latex)
 
-            with open(OUTPUT_FILENAME+'_CLEAN'+'.tex', 'w', encoding='utf-8') as f:
+            with open(CLEAN, 'w', encoding='utf-8') as f:
                 f.write(final_latex)
-            print(f"\n✅ Success! Clean LaTeX document assembled and saved to '{OUTPUT_FILENAME+'_CLEAN'+'.tex'}'.")
+            print(f"\n✅ Success! Clean LaTeX document assembled and saved to '{CLEAN}'.")
             
         except Exception as e:
             print(f"\n❌ An error occurred during the AI conversion process: {e}")
 
     elif mode == 'n':
         # --- CLEANER-MODE ---
-        print(f"\nRunning in Cleaner-only mode on '{OUTPUT_FILENAME+'.tex'}'...")
+        print(f"\nRunning in Cleaner-only mode on '{OUTPUT}'...")
         try:
-            with open(OUTPUT_FILENAME+'.tex', 'r', encoding='utf-8') as f:
+            with open(OUTPUT, 'r', encoding='utf-8') as f:
                 existing_latex = f.read()
             
             # Apply the post-processing function to the existing file
             cleaned_latex = post_process_latex(existing_latex)
             
-            with open(OUTPUT_FILENAME+'_CLEAN'+'.tex', 'w', encoding='utf-8') as f:
+            with open(CLEAN, 'w', encoding='utf-8') as f:
                 f.write(cleaned_latex)
             
-            print(f"✅ Success! Cleaned LaTeX has been saved back to '{OUTPUT_FILENAME+'CLEAN'+'.tex'}'.")
+            print(f"✅ Success! Cleaned LaTeX has been saved back to '{CLEAN}'.")
             
         except FileNotFoundError:
-            print(f"ERROR: The file '{OUTPUT_FILENAME}' does not exist. Run AI-mode first to create it.")
+            print(f"ERROR: The file '{OUTPUT}' does not exist. Run AI-mode first to create it.")
         except Exception as e:
             print(f"\n❌ An error occurred during the cleaning process: {e}")
             

@@ -12,6 +12,7 @@ __pycache__/
 *.so
 *.md
 *.tex
+studyguides/
 .env
 extracted_chunks.txt
 *.jsonl
