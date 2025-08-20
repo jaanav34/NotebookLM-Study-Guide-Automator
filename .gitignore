@@ -10,9 +10,6 @@ __pycache__/
 *.db
 # C extensions
 *.so
-*.md
-*.tex
-studyguides/
 .env
 extracted_chunks.txt
 *.jsonl
