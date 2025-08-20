@@ -10,8 +10,11 @@ __pycache__/
 *.db
 # C extensions
 *.so
-*.md
+gemini.md
+uv.lock
 *.tex
+*.txt
+*.python-version
 studyguides/
 .env
 extracted_chunks.txt
