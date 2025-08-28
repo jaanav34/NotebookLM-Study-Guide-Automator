@@ -1,99 +1,116 @@
-import pytest
+import unittest
+from unittest.mock import patch, MagicMock, mock_open
 import json
 import os
-from unittest.mock import MagicMock, patch
+
 from gm.render_policy import ManimCodeGenerator, VideoRenderer, render_video_from_manifest
 
-# Mock for ManimCodeGenerator
-class MockManimCodeGenerator:
-    def generate_manim_code(self, text_content, animation_suggestions, manim_docs_context):
-        return {
-            "imports": "from manim import *\nfrom manim_voiceover import VoiceoverScene\nfrom manim_voiceover.services.gtts import GTTSService",
-            "class_definition": "class GenScene(VoiceoverScene):",
-            "construct_method": f"""
-    def construct(self):
-        self.set_speech_service(GTTSService())
-        text = Text(\"{text_content}\").scale(0.8)
-        with self.voiceover(text=f\"Narrating: {text_content}\") as tracker:
-            self.play(Write(text), run_time=tracker.duration)
-        self.wait(1)
-"""
+class TestRenderPolicy(unittest.TestCase):
+
+    def setUp(self):
+        self.manifest = {
+            "manifest_id": "test-manifest",
+            "chapter_id": "test-chapter",
+            "scenes": [
+                {
+                    "scene_id": "test-scene",
+                    "manim_scene_name": "TestScene",
+                    "text_content": "This is a test.",
+                    "animation_suggestions": {}
+                }
+            ],
+            "style": {"preset": "test-style"},
+            "narration": {
+                "text_per_scene": {
+                    "test-scene": "This is a test narration."
+                }
+            },
+            "render_settings": {"quality": "low"}
         }
 
-# Mock for VideoRenderer
-class MockVideoRenderer:
-    def render_video(self, manim_code, render_settings, output_path, subtitle_option=None):
-        # Simulate successful video creation
-        with open(output_path, 'w') as f:
-            f.write("Simulated video content")
-        if subtitle_option == "srt":
-            with open(output_path.replace(".mp4", ".srt"), 'w') as f:
-                f.write("Simulated subtitle content")
-        return True
+    @patch('google.generativeai.GenerativeModel')
+    def test_manim_code_generator(self, MockGenerativeModel):
+        mock_model = MockGenerativeModel.return_value
+        mock_model.generate_content.return_value = MagicMock(text="from manim import *\n\nclass TestScene(Scene):\n    def construct(self):\n        pass")
 
-@pytest.fixture
-def mock_render_components(monkeypatch):
-    monkeypatch.setattr("gm.render_policy.ManimCodeGenerator", MockManimCodeGenerator)
-    monkeypatch.setattr("gm.render_policy.VideoRenderer", MockVideoRenderer)
+        generator = ManimCodeGenerator(gemini_api_key="test_key")
+        scene_data = self.manifest['scenes'][0]
+        style_preset = self.manifest['style']
+        narration_text = self.manifest['narration']['text_per_scene']['test-scene']
 
-def test_render_video_from_manifest_happy_path(mock_render_components, tmp_path):
-    manifest_content = {
-        "manifest_id": "test-manifest-id",
-        "source_chapter": "test_chapter.md",
-        "chapter_section": "test_section",
-        "chapter_id": "test_chapter_id",
-        "title": "Test Title",
+        code = generator.generate_code(scene_data, style_preset, narration_text)
+
+        self.assertIn("class TestScene(Scene):", code)
+        mock_model.generate_content.assert_called_once()
+
+    @patch('subprocess.run')
+    @patch('builtins.open', new_callable=mock_open)
+    def test_video_renderer_render_scene(self, mock_file, mock_subprocess_run):
+        renderer = VideoRenderer()
+        script_content = "from manim import *\n\nclass TestScene(Scene):\n    def construct(self):\n        pass"
+        scene_name = "TestScene"
+        render_settings = {"quality": "low"}
+
+        # Mock the return value for the subprocess call
+        mock_subprocess_run.return_value = MagicMock(check_returncode=lambda: None, stdout="File ready at path/to/video.mp4", stderr="")
+
+        video_path = renderer.render_scene(script_content, scene_name, render_settings)
+
+        self.assertEqual(video_path, "path/to/video.mp4")
+        mock_file.assert_called_with(os.path.join(renderer.generated_scripts_dir, f"{scene_name}.py"), "w")
+        mock_subprocess_run.assert_called_once()
+
+    @patch('subprocess.run')
+    @patch('builtins.open', new_callable=mock_open)
+    def test_video_renderer_combine_videos(self, mock_file, mock_subprocess_run):
+        renderer = VideoRenderer()
+        video_paths = ["path/to/video1.mp4", "path/to/video2.mp4"]
+        output_filename = "final_video.mp4"
+
+        # Mock the return value for the subprocess call
+        mock_subprocess_run.return_value = MagicMock(check_returncode=lambda: None, stdout="", stderr="")
+
+        final_video_path = renderer.combine_videos(video_paths, output_filename)
+
+        self.assertIsNotNone(final_video_path)
+        mock_file.assert_called_with(os.path.join(renderer.generated_scripts_dir, "input_files.txt"), "w")
+        mock_subprocess_run.assert_called_once()
+
+    @patch('gm.render_policy.ManimCodeGenerator')
+    @patch('gm.render_policy.VideoRenderer')
+    @patch('builtins.open', new_callable=mock_open, read_data=json.dumps({
+        "manifest_id": "test-manifest",
+        "chapter_id": "test-chapter",
         "scenes": [
             {
-                "scene_id": "scene_1",
-                "type": "explanation",
-                "manim_scene_name": "Scene1",
-                "text_content": "This is the first scene."
-            },
-            {
-                "scene_id": "scene_2",
-                "type": "example",
-                "manim_scene_name": "Scene2",
-                "text_content": "This is the second scene."
+                "scene_id": "test-scene",
+                "manim_scene_name": "TestScene",
+                "text_content": "This is a test.",
+                "animation_suggestions": {}
             }
         ],
-        "render_settings": {
-            "low_quality": { "resolution": "854x480", "fps": 15 },
-            "high_quality": { "resolution": "1920x1080", "fps": 30, "subtitles": "srt" }
-        },
+        "style": {"preset": "test-style"},
         "narration": {
-            "provider": "google",
-            "voice": "echo",
             "text_per_scene": {
-                "scene_1": "Narration for scene 1.",
-                "scene_2": "Narration for scene 2."
+                "test-scene": "This is a test narration."
             }
         },
-        "metadata": {
-            "created_by": "test",
-            "created_at": "2025-01-01T00:00:00Z",
-            "notebooklm_version": "1.0"
-        },
-        "validation_hash": "hash"
-    }
-    manifest_file = tmp_path / "test_manifest.json"
-    manifest_file.write_text(json.dumps(manifest_content))
+        "render_settings": {"quality": "low"}
+    }))
+    def test_render_video_from_manifest(self, mock_file, MockVideoRenderer, MockManimCodeGenerator):
+        mock_code_generator = MockManimCodeGenerator.return_value
+        mock_code_generator.generate_code.return_value = "from manim import *\n\nclass TestScene(Scene):\n    def construct(self):\n        pass"
 
-    # Ensure the 'renders' directory exists for the test output
-    renders_dir = tmp_path / "renders"
-    renders_dir.mkdir()
+        mock_renderer = MockVideoRenderer.return_value
+        mock_renderer.render_scene.return_value = "path/to/scene_video.mp4"
+        mock_renderer.combine_videos.return_value = "path/to/final_video.mp4"
 
-    result = render_video_from_manifest(str(manifest_file), output_base_dir=tmp_path)
-    assert result is True
-    assert (renders_dir / "test_chapter_id_final.mp4").exists()
-    assert (renders_dir / "test_chapter_id_final.srt").exists()
+        render_video_from_manifest("dummy_manifest.json", "low", "test_api_key")
 
-def test_render_video_from_manifest_file_not_found():
-    with pytest.raises(FileNotFoundError, match="Manifest file not found"):
-        render_video_from_manifest("non_existent_manifest.json")
+        mock_code_generator.generate_code.assert_called_once()
+        mock_renderer.render_scene.assert_called_once()
+        mock_renderer.combine_videos.assert_called_once()
 
-def test_render_video_from_manifest_invalid_json(tmp_path):
-    manifest_file = tmp_path / "invalid_manifest.json"
-    manifest_file.write_text("{\"key\": \"value") # Invalid JSON
-    with pytest.raises(json.JSONDecodeError):
-        render_video_from_manifest(str(manifest_file))
+if __name__ == '__main__':
+    unittest.main()
+

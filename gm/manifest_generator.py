@@ -10,8 +10,8 @@ load_dotenv()
 
 class GeminiAPI:
     def __init__(self):
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model = genai.GenerativeModel('gemini-pro')
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY")) # type: ignore
+        self.model = genai.GenerativeModel('gemini-2.5-pro') # type: ignore
 
     def generate_content(self, prompt):
         response = self.model.generate_content(prompt)

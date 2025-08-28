@@ -13,7 +13,7 @@ __pycache__/
 gemini.md
 uv.lock
 *.tex
-*.txt
+
 prompt for Gemini CLI.md
 media/
 gemini1.md
