@@ -8,14 +8,16 @@ import unicodedata
 load_dotenv()
 
 # --- Configuration ---
-INPUT_FILENAME = "studyguides/final_study_guide.md"
+INPUT_FILENAME = "studyguides/ECE30200_final_study_guide.md"
 OUTPUT = "studyguides/study_guide.tex"
 CLEAN = "studyguides/study_guide_CLEAN.tex"
-MODEL_NAME = "gemma-3-27b-it" # Or any other suitable model like "gemini-1.0-pro"
+MODEL_NAME = "gemini-2.5-pro" # Or any other suitable model like "gemini-1.0-pro"
 # ─── Global toggle: strip all circuitikz environments? ───────────────────────
 REMOVE_TIKZ_BLOCKS = True
+CHEATSHEET = False
 # This LaTeX header is taken directly from your prompt
-LATEX_HEADER = r"""
+if(CHEATSHEET!=True):
+    LATEX_HEADER = r"""
 \documentclass{article}
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -65,6 +67,80 @@ LATEX_HEADER = r"""
 
 \begin{document}
 """
+else:
+    LATEX_HEADER = r"""
+\documentclass[10pt]{article}
+\usepackage[framemethod=TikZ]{mdframed}
+\usepackage{amsthm}
+\usepackage[landscape]{geometry}
+\usepackage{multicol}
+\usepackage{tikz}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage[T1]{fontenc}
+\usepackage{utopia}
+\usepackage{changepage}
+\usepackage{amssymb}
+\usepackage{fancyhdr}
+\usepackage[many]{tcolorbox}
+\usepackage{fullpage}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{mathpazo}
+\usetikzlibrary{circuits.logic.US,circuits.logic.IEC}
+\lstset{language=Verilog,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  stringstyle=\color{red},
+  frame=single,
+  breaklines=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+}
+
+\usepackage{tcolorbox}
+\newtcolorbox{conceptbox}[2][]{
+  breakable,
+  enhanced,
+  before skip=4pt,
+  after skip=4pt,
+  left=2pt, right=2pt, top=2pt, bottom=2pt,
+  boxrule=0.8pt,
+  colframe=#1!70!black,
+  colback=#1!20,
+  title=\scriptsize\bfseries #2
+}
+
+
+%
+
+% Color definitions ... (same as draft)
+\definecolor{r1}{RGB}{255, 191, 191}
+\definecolor{r2}{RGB}{255, 191, 223}
+\definecolor{r3}{RGB}{255, 207, 207}
+\definecolor{b1}{RGB}{191, 223, 255}
+\definecolor{b2}{RGB}{191, 239, 255}
+\definecolor{b3}{RGB}{191, 255, 255}
+\definecolor{g1}{RGB}{191, 255, 191}
+\definecolor{g2}{RGB}{191, 255, 223}
+\definecolor{g3}{RGB}{207, 255, 207}
+\definecolor{o1}{RGB}{255, 223, 191}
+\definecolor{o2}{RGB}{255, 239, 191}
+\definecolor{o3}{RGB}{255, 231, 191}
+\definecolor{v1}{RGB}{223, 191, 255}
+\definecolor{v2}{RGB}{239, 191, 255}
+\definecolor{v3}{RGB}{231, 191, 255}
+\definecolor{y1}{RGB}{255, 255, 191}
+\definecolor{y2}{RGB}{255, 247, 191}
+\definecolor{y3}{RGB}{255, 239, 191}
+\definecolor{w}{HTML}{eeeeee}
+\definecolor{g}{HTML}{444444}
+\definecolor{b}{HTML}{222222}
+\definecolor{lightgrey}{HTML}{cccccc}
+\geometry{ letterpaper, left=0.25in, right=0.25in, top=0.15in, bottom=0.25in}
+\pagestyle{fancy}
+\fancyhf{}
+    """
 LATEX_FOOTER = r"""
 \end{document}
 """
@@ -294,12 +370,12 @@ def fix_lonely_items(latex_content: str) -> str:
 
 def escape_plaintext_underscores_and_superscripts(text: str) -> str:
     """
-    In all non‑math segments (i.e. outside $…$):
+    In all non‑math segments (i.e. outside $…$ or \\[…\\]):
       1) Escape lone underscores (_) → \\_
       2) Turn digit^letter → digit$^letter$
     """
     # Split on math segments
-    parts = re.split(r'(\$.*?\$)', text)
+    parts = re.split(r'(\\\[.*?\\\])', text)
     for idx in range(0, len(parts), 2):   # only plaintext bits
         pt = parts[idx]
         # 1) escape any _ that's not already \_

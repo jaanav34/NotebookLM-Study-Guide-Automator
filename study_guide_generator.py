@@ -4,18 +4,24 @@ from notebook_automator import query_notebook
 
 # The master prompt template
 PROMPT_TEMPLATE = """
-Generate a structured, exam-focused textbook/study guide hybrid for ECE 270 Exam 2. Use only the provided lecture slides and past exams as sources, prioritizing lecture slides (lec_ files) over supplements (Supplement_ files). Ensure the study guide follows a structured, educational, and exam-oriented format, emphasizing conceptual clarity, problem-solving techniques, and digital circuit design strategies. Also include exam style problems and explanations. The past exams and their solutions have been provided. To make each section as long as possible, output section by section and wait. Continue with section {X}. Do not waste tokens on introducing or summarizing a section.
+Generate a structured, exam-focused textbook/study guide hybrid for ECE 301: Signals and Systems Midterm 1. Use only the provided lecture slides (M1–M6), homework + solutions (1–5), syllabus, the past exam (ECE301_Fall_2022_Exam_1.pdf), and Alan V. Oppenheim, Signals and Systems. Prioritize current semester lecture slides and homework over older sources.
+The study guide must combine textbook-level clarity with exam precision, optimized for last-minute review.
 
-Formatting Instructions:
-Include (only when related to current section) truth tables, circuit diagrams, k-maps and Boolean expressions formatted in LaTeX
-Use bullet points for key concepts and step-by-step derivations
-Ensure the study guide is structured for easy last-minute review while maintaining depth
-Goal:
-This study guide should be a hybrid between a textbook and an exam-oriented manual, with clear explanations, step-by-step circuit derivations, and practical problem-solving techniques. Ensure it is fully aligned with the ECE 270 Exam 2 objectives and optimized for efficient exam preparation.
+For each topic:
+Provide clear definitions, properties, and equations in LaTeX.
+Show conceptual links (e.g., energy vs. power, continuous vs. discrete).
+Include step-by-step derivations or proofs when relevant.
+Do not include any example problems or numerical solutions unless explicitly stated in that subsection.
+At the end of each subsection, list what content must not be included (e.g., exclude Fourier or convolution material).
+Strictly obey these do-not-include boundaries to prevent overlap between sections.
 
-Important Notes:
-Follow structured formatting, using section headers, definitions, examples, and problem-solving steps.
+Formatting:
+Use bullet points and natural language explanations.
+Avoid summaries or introductions of the current subsection.
+Goal: Produce a technical, exam-oriented hybrid between an ECE signals textbook and an applied manual, precisely aligned with Midterm 1 coverage.
 
+Continue with section {X}.
+Current section: 
 {Y}
 """
 
@@ -77,7 +83,7 @@ async def generate_study_guide():
     
     # This will create a new, empty file at the start of the conversation
     with open("final_study_guide.md", "w") as f:
-        f.write("# ECE 270 Exam 2 Study Guide\n\n")
+        f.write("# ECE 30200 Quiz 1 Study Guide\n\n")
 
     for i, topic in enumerate(topics):
         section_id = topic['id']
@@ -91,7 +97,7 @@ async def generate_study_guide():
         # Call the scraper
         response_md = await query_notebook(prompt)
         
-        if "error" in response_md.lower():
+        if response_md.lower().startswith("error"):
             print(f"An error occurred: {response_md}")
             break # Stop if there's an error
 

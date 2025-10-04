@@ -1,76 +1,103 @@
-1. SoP, PoS, K-Maps, and Timing Hazards (30%)
-(a) Sum of Products (SoP) and Product of Sums (PoS) Representations
-Define SoP (minterm-based) and PoS (maxterm-based) representations
-Explain Canonical Sum (Sum of Minterms) and Canonical Product (Product of Maxterms)
-Demonstrate how to convert between shorthand notation (ON set/OFF set) and full expressions
-Sources: lec2.1SoPPoSKMaps1.pdf, Supplement 2A Combinational Circuit Analysis and Synthesis.pdf
-(b) Karnaugh Maps (K-Maps)
-Explain how to map a truth table, SoP/PoS expression, Canonical Sum, or Canonical Product onto a K-map
-Provide step-by-step minimization of logic expressions using K-maps for up to 4 variables
-Address handling of don’t care conditions
-Sources: lec2.1SoPPoSKMaps1.pdf, Supplement 2A Combinational Circuit Analysis and Synthesis.pdf
-(c) Timing Hazards in Combinational Circuits
-Define static-1, static-0, dynamic 1-to-0, and dynamic 0-to-1 hazards
-Illustrate how to identify hazards in circuit designs using K-maps
-Describe design techniques for hazard-free circuits
-Sources: lec2.2Harzards.pdf, Supplement 2B Timing Hazards.pdf
+1. Signals Fundamentals
 
-2. Decoders (15%)
-(a) Understanding Decoders
-Define n:2ⁿ decoders and explain their role in digital circuits
-Compare high-active (minterm-based) vs. low-active (maxterm-based) outputs
-Explain the use of enable signals
-Sources: lec2.5Decoders1.pdf, Supplement 2D Decoders and Demultiplexers.pdf
-(b) Designing Decoders
-Demonstrate logic gate-based implementation of a decoder
-Illustrate how to expand decoders using decoder trees
-Sources: lec2.5Decoders1.pdf, Supplement 2D Decoders and Demultiplexers.pdf
-(c) Using Decoders for Logic Function Implementation
-Explain how decoders can be used to implement arbitrary Boolean functions
-Provide step-by-step examples of using decoders in circuit design
-Sources: lec2.5Decoders1.pdf, Supplement 2D Decoders and Demultiplexers.pdf
+(a) Definition of signals; energy vs. power signals; continuous vs. discrete signals.
+Include examples using sinusoids, exponentials, and step functions.
+Do not include: system properties, convolution, Fourier series, or LTI system response content.
 
-3. Encoders and More (15%)
-(a) Understanding Encoders
-Define 2ⁿ:n binary-to-decimal encoders, priority encoders, and decoders with strobe output
-Discuss differences between basic encoders and priority encoders
-Sources: lec2.6Encoders.pdf, Supplement 2E Encoders.pdf
-(b) Designing Encoders
-Explain how to implement an encoder using basic logic gates
-Illustrate encoder truth tables and Boolean expressions
-Sources: lec2.6Encoders.pdf, Supplement 2E Encoders.pdf
-(c) Additional Concepts
-Discuss Programmable Logic Devices (PLDs), Read-Only Memory (ROM), Look-Up Tables (LUTs), and Field-Programmable Gate Arrays (FPGAs)
-Explain Open-Drain Outputs, Tri-State Buffers, and Transmission Gates
-Sources: lec2.4ROM_LUT.pdf, Supplement 2C Programmable Logic Devices.pdf
+(b) Even and odd decomposition, periodic signals, and time transformations (shifts, reversals, scaling).
+Include examples using both $x(t)$ and $x[n]$.
+Do not include: unit impulse or step definitions, LTI convolution, or Fourier content.
 
-4. Multiplexers (15%)
-(a) Understanding Multiplexers
-Define 2ⁿ:1 multiplexers and explain their function as multiway switches controlled by select lines
-Illustrate truth tables and logic expressions for multiplexers
-Sources: lec2.3Mux.pdf, Supplement 2F Multiplexers.pdf
-(b) Designing Multiplexers
-Demonstrate how to design a multiplexer using basic logic gates
-Explain how to cascade multiple multiplexers to build larger multiplexer systems
-Sources: lec2.3Mux.pdf, Supplement 2F Multiplexers.pdf
-(c) Using Multiplexers to Implement Logic Functions
-Show how to implement arbitrary logic functions using multiplexers
-Provide an example of constructing a MUX-tree
-Sources: lec2.3Mux.pdf, Supplement 2F Multiplexers.pdf
+(c) Complex exponential and sinusoidal signals; phasor representation; periodicity conditions.
+Include $e^{j\omega t}$ examples for discrete and continuous time.
+Do not include: convolution or Fourier transform discussions.
 
-5. Verilog Designs (25%)
-(a) Verilog Modeling Approaches
-Define and differentiate:
-Structural modeling using primitive gates
-Dataflow modeling using continuous assignments
-Behavioral modeling using procedural blocks
-(b) Hierarchical Verilog Design & Module Instantiation
-Explain module instantiation using connection by name vs. connection by order
-Demonstrate how to structure Verilog designs with multiple submodules
-(c) Verilog Implementations of Common Digital Blocks
-Provide Verilog implementations for:
-Decoders
-Encoders
-Multiplexers
-Binary-Coded Decimal (BCD) to 7-Segment Code Converters
+(d) Energy and power computations; definitions and classification.
+Include equations for energy/power, RMS, and examples from Homework 1.
+Do not include: impulse/step system responses or LTI properties.
 
+(e) Signal operations and time-domain transformations summary table.
+Include scaling, shifting, folding formulas.
+Do not include: convolution integrals or frequency-domain analysis.
+
+(f) Homework Problems and Exam Solutions.
+Include all Signals Fundamentals problems + solutions.
+
+2. Systems and Their Properties
+
+(a) Definitions: system, input/output relation, and classifications (static/dynamic, linear/nonlinear).
+Do not include: impulse response or convolution material.
+
+(b) Linearity and time invariance (LTI test examples).
+Include step-by-step examples from M1.pdf and M2.pdf.
+Do not include: convolution or frequency response.
+
+(c) Causality and stability.
+Use energy and bounded-input bounded-output (BIBO) definitions.
+Do not include: frequency domain or Fourier topics.
+
+(d) Interconnection of systems: cascade, parallel, feedback.
+Do not include: response derivations or Fourier coefficients.
+
+3. Impulse and Step Responses
+
+(a) Continuous-time and discrete-time unit impulse, unit step definitions, and properties.
+Do not include: Fourier or LTI response to complex exponentials.
+
+(b) Impulse response concept and relation to system behavior.
+Do not include: convolution computation examples or Fourier topics.
+
+(c) Step response derivation and relation to impulse response (integration/differentiation).
+Do not include: sinusoidal inputs or Fourier analysis.
+
+(d) Examples of impulse/step response derivation from HW3_Solution.pdf.
+Do not include: periodic inputs or Fourier coefficients.
+
+4. Convolution
+
+(a) Convolution definition (continuous and discrete).
+Include integral and summation expressions.
+Do not include: Fourier analysis or step/impulse definitions.
+
+(b) Graphical convolution procedure (time reversal, shifting, overlap area).
+Do not include: Fourier coefficient derivations.
+
+(c) Example problems: rectangular pulses, exponential signals.
+Do not include: sinusoidal steady-state.
+
+(d) Convolution properties (commutative, associative, distributive).
+Do not include: LTI frequency response.
+
+5. LTI System Properties and Frequency Response
+
+(a) Response to complex exponentials.
+Show derivation of $H(j\omega)$ and explain why exponentials are eigenfunctions.
+Do not include: Fourier series or discrete spectra.
+
+(b) Linearity in LTI systems: zero-state and zero-input response.
+Do not include: convolution derivations.
+
+(c) Properties of LTI systems: causality, stability revisited in frequency domain.
+Do not include: Fourier coefficients or time-domain convolution.
+
+(d) Examples from M5.pdf: use impulse responses to compute steady-state response.
+Do not include: Fourier transform formulas.
+
+6. Fourier Series Representation
+
+(a) Continuous-time Fourier series derivation.
+Include $x(t) = \sum c_k e^{jk\omega_0t}$ and $c_k = \frac{1}{T}\int_T x(t)e^{-jk\omega_0t}dt$.
+Do not include: discrete-time Fourier series or convergence properties.
+
+(b) Discrete-time Fourier series and synthesis equations.
+Include periodic discrete examples.
+Do not include: Fourier transform, DTFT, or Laplace transform content.
+
+(c) Properties of Fourier series (linearity, time-shift, conjugate symmetry).
+Do not include: Fourier transform or spectral density.
+
+(d) Examples: square wave, sawtooth wave, and exponential signals.
+Do not include: Fourier transform pairs or frequency-domain filters.
+
+(e) Practical interpretations — what $|c_k|$ and $\angle c_k$ represent.
+Do not include: Fourier transform or energy spectral density.
