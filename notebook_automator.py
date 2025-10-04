@@ -1,6 +1,7 @@
 import asyncio
 import re
 from playwright.async_api import async_playwright, expect #type: ignore
+import html2text
 
 # --- Configuration ---
 NOTEBOOK_URL = "https://notebooklm.google.com/notebook/" 
@@ -58,7 +59,7 @@ async def query_notebook(question: str) -> str:
             await page.wait_for_timeout(15000)  
             # --- NEW: Save raw response as Markdown ---
             try:
-                import html2text
+                
                 message_content = ai_container.locator(".message-text-content")
                 html_content = await message_content.evaluate("node => node.innerHTML")
 
@@ -102,7 +103,6 @@ async def query_notebook(question: str) -> str:
             # This part is for the final study guide file.
             markdown_content = ""
             try:
-                import html2text
                 message_content = ai_container.locator(".message-text-content")
                 html_content = await message_content.evaluate("node => node.innerHTML")
                 
