@@ -80,23 +80,23 @@ async def generate_study_guide():
     full_study_guide = []
 
     print(f"Found {len(topics)} sections to generate.")
-    
+
     # This will create a new, empty file at the start of the conversation
     with open("final_study_guide.md", "w") as f:
-        f.write("# ECE 30200 Quiz 1 Study Guide\n\n")
+        f.write("# ECE 301 Quiz 1 Study Guide\n\n")
 
     for i, topic in enumerate(topics):
         section_id = topic['id']
         section_title = topic['title']
-        
+
         print(f"--- Generating Section {section_id}: {section_title} ({i+1}/{len(topics)}) ---")
 
         # Format the prompt for the current section
         prompt = PROMPT_TEMPLATE.format(X=section_id, Y=section_title)
-        
+
         # Call the scraper
         response_md = await query_notebook(prompt)
-        
+
         if response_md.lower().startswith("error"):
             print(f"An error occurred: {response_md}")
             break # Stop if there's an error
@@ -107,8 +107,10 @@ async def generate_study_guide():
             # We will just write a simple header.
             f.write(f"## Section {section_id}\n\n")
             f.write(response_md)
+            # Add the diagram marker
+            f.write(f"\n\n%%DIAGRAM_MARKER_{section_id}%%\n\n")
             f.write("\n\n---\n\n")
-            
+
         print(f"✓ Section {section_id} complete and saved.")
 
     print("\n\n✅ Study guide generation complete!")

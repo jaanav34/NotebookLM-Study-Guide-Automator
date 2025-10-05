@@ -4,11 +4,12 @@ import time
 import google.generativeai as genai
 from dotenv import load_dotenv
 import unicodedata
+import json
 
 load_dotenv()
 
 # --- Configuration ---
-INPUT_FILENAME = "studyguides/ECE30200_final_study_guide.md"
+INPUT_FILENAME = "studyguides/final_study_guide copy.md"
 OUTPUT = "studyguides/study_guide.tex"
 CLEAN = "studyguides/study_guide_CLEAN.tex"
 MODEL_NAME = "gemini-2.5-pro" # Or any other suitable model like "gemini-1.0-pro"
@@ -27,7 +28,10 @@ if(CHEATSHEET!=True):
 \usepackage{color}
 \usepackage{graphicx}
 \usepackage{tikz}
-
+\usepackage{pgfplots} % <<< ADD THIS
+\pgfplotsset{compat=1.18} % <<< AND THIS for compatibility
+\usetikzlibrary{external} % <<< ADD THIS
+\tikzexternalize% <<< AND THIS
 \usepackage[paperwidth=8.5in,paperheight=11.0in,
   left=0.35in,right=0.35in,top=0.3in,bottom=0.15in,
   includefoot,heightrounded]{geometry}
@@ -270,7 +274,7 @@ def post_process_latex(latex_content: str) -> str:
     for find_char, replace_with in cleaning_rules.items():
         latex_content = latex_content.replace(find_char, replace_with)    
     
-    latex_content = escape_plaintext_underscores_and_superscripts(latex_content)
+    # latex_content = escape_plaintext_underscores_and_superscripts(latex_content)
     # **New step**: fix those stray single-backslashes in tables
     latex_content = fix_tabular_row_separators(latex_content)
     latex_content = break_table_rows(latex_content)
@@ -286,7 +290,7 @@ def post_process_latex(latex_content: str) -> str:
     latex_content = re.sub(r'^\s*\\hrulefill\s*$', '', latex_content, flags=re.MULTILINE)
     if REMOVE_TIKZ_BLOCKS:
         latex_content = remove_tikz_blocks(latex_content)
-    latex_content = remap_fourth_itemize(latex_content)
+    # latex_content = remap_fourth_itemize(latex_content)
     latex_content = re.sub(r'[\u0080-\uFFFF]', replace_unicode_char, latex_content)
 
     def fix_enumerate(match):
@@ -301,7 +305,34 @@ def post_process_latex(latex_content: str) -> str:
     # and passes the whole block to the fix_enumerate function
     latex_content = re.sub(r'((\d+\\\. .*(\n|$))+)', fix_enumerate, latex_content)
 
+    # Add the diagram replacement step at the end
+    latex_content = replace_diagram_markers(latex_content)
+
     print("Cleaning complete.")
+    return latex_content
+def replace_diagram_markers(latex_content):
+    try:
+        with open('diagrams.json', 'r', encoding='utf-8') as f:
+            diagrams = json.load(f)
+    except FileNotFoundError:
+        print("diagrams.json not found. No diagrams will be inserted.")
+        return latex_content
+
+    for section_id, diagram_code in diagrams.items():
+        marker = f"%%DIAGRAM_MARKER_{section_id}%%"
+        if diagram_code:
+            # You might want to wrap the diagram in a figure environment
+            replacement = (
+                "\\begin{figure}[h!]\n"
+                "\\centering\n"
+                f"{diagram_code}\n"
+                f"\\caption{{Diagram for section {section_id}}}\n"
+                "\\end{figure}"
+            )
+            latex_content = latex_content.replace(marker, replacement)
+        else:
+            # If no diagram was generated, just remove the marker
+            latex_content = latex_content.replace(marker, "")
     return latex_content
 
 def remap_fourth_itemize(text: str) -> str:
@@ -374,8 +405,8 @@ def escape_plaintext_underscores_and_superscripts(text: str) -> str:
       1) Escape lone underscores (_) → \\_
       2) Turn digit^letter → digit$^letter$
     """
-    # Split on math segments
-    parts = re.split(r'(\\\[.*?\\\])', text)
+    # Split on math segments \[...\] (display math) or $...$ (inline math)
+    parts = re.split(r'(\$.*?\$|\\\[.*?\\\])', text, flags=re.DOTALL)
     for idx in range(0, len(parts), 2):   # only plaintext bits
         pt = parts[idx]
         # 1) escape any _ that's not already \_

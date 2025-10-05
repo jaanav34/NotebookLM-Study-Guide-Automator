@@ -37,7 +37,7 @@ Use energy and bounded-input bounded-output (BIBO) definitions.
 Do not include: frequency domain or Fourier topics.
 
 (d) Interconnection of systems: cascade, parallel, feedback.
-Do not include: response derivations or Fourier coefficients.
+Do not include: response derivations or Fourier coefficients. 
 
 3. Impulse and Step Responses
 
